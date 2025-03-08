@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AuthenticationController < ApiController
   before_action :authorize_request, except: :login
 
@@ -10,7 +12,7 @@ class AuthenticationController < ApiController
 
       render json: {
         token: token,
-        exp: time.strftime("%m-%d-%Y %H:%M"),
+        exp: time.strftime('%m-%d-%Y %H:%M'),
         username: @user.display_name
       }, status: :ok
     else

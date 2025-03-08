@@ -1,6 +1,7 @@
+# frozen_string_literal: true
+
 class AddExclusionConstraintVehicleRegistrations < ActiveRecord::Migration[7.0]
   def change
-
     # NOTE: Depends on btree_gist extension being created in scripts/db_setup.sh by superuser
     #
     # Prevent overlapping reservations for
@@ -22,7 +23,6 @@ class AddExclusionConstraintVehicleRegistrations < ActiveRecord::Migration[7.0]
 
       SQL
     end
-
 
     # Error: data type integer has no default operator class for access method "gist"
     # #=> Needed to enable the extension

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class TripRequest < ApplicationRecord
   belongs_to :rider, class_name: 'User'
   belongs_to :start_location, class_name: 'Location'
@@ -11,5 +13,4 @@ class TripRequest < ApplicationRecord
   # only trip could be in progress for a rider between the same locations.
 
   validates :rider, :start_location, :end_location, presence: true
-
 end

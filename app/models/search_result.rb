@@ -1,5 +1,6 @@
-class SearchResult < ApplicationRecord
+# frozen_string_literal: true
 
+class SearchResult < ApplicationRecord
   # this isn't strictly necessary, but it will prevent
   # rails from calling save, which would fail anyway.
   def readonly?

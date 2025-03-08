@@ -1,25 +1,27 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class AuthenticationControllerTest < ActionDispatch::IntegrationTest
-  test "POST to login with correct user credentials" do
+  test 'POST to login with correct user credentials' do
     post auth_login_url, params: {
       email: rider.email,
-      password: "abcd1234"
+      password: 'abcd1234'
     }
 
     assert_response :ok
     assert jwt_payload = JSON.parse(response.body)
-    assert jwt_payload.has_key?('token')
-    assert jwt_payload.has_key?('exp')
-    assert jwt_payload.has_key?('username')
+    assert jwt_payload.key?('token')
+    assert jwt_payload.key?('exp')
+    assert jwt_payload.key?('username')
 
     assert_equal rider.display_name, jwt_payload['username']
   end
 
-  test "POST to login with INVALID credentials" do
+  test 'POST to login with INVALID credentials' do
     post auth_login_url, params: {
       email: rider.email,
-      password: "abcd123"
+      password: 'abcd123'
     }
 
     assert_response :unauthorized

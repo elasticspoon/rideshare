@@ -1,5 +1,6 @@
-class ApiController < ActionController::API
+# frozen_string_literal: true
 
+class ApiController < ActionController::API
   def authorize_request
     header = request.headers['Authorization']
     header = header.split(' ').last if header

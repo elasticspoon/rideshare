@@ -1,12 +1,14 @@
+# frozen_string_literal: true
+
 class Location < ApplicationRecord
   validates :address,
-    presence: true,
-    uniqueness: true # simple approach, assumes fully address, all parts
+            presence: true,
+            uniqueness: true # simple approach, assumes fully address, all parts
 
   validates :position, presence: true
   validates :state,
-    presence: true,
-    length: { is: 2 }
+            presence: true,
+            length: { is: 2 }
 
   geocoded_by :address
 

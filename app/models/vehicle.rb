@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 class Vehicle < ApplicationRecord
   validates :name,
-    presence: true,
-    uniqueness: true
+            presence: true,
+            uniqueness: true
 
   attr_accessor :status
 
@@ -13,7 +15,6 @@ class Vehicle < ApplicationRecord
   }, _prefix: true
 
   validates :status,
-    inclusion: { in: VehicleStatus::VALID_STATUSES },
-    presence: true
-
+            inclusion: { in: VehicleStatus::VALID_STATUSES },
+            presence: true
 end

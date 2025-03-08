@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class EnableExtensionPgStatStatements < ActiveRecord::Migration[7.1]
   # PGSS = 'pg_stat_statements'
   #
@@ -5,7 +7,6 @@ class EnableExtensionPgStatStatements < ActiveRecord::Migration[7.1]
   #   # prereq: added to shared_preload_libraries='pg_stat_statements'
   #   enable_extension(PGSS) unless extension_enabled?(PGSS)
   # end
-
 
   # Replaced by:
   # sh scripts/setup_db.sh

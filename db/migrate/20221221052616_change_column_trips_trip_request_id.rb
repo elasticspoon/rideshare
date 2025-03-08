@@ -1,5 +1,6 @@
-class ChangeColumnTripsTripRequestId < ActiveRecord::Migration[7.1]
+# frozen_string_literal: true
 
+class ChangeColumnTripsTripRequestId < ActiveRecord::Migration[7.1]
   # Purpose: changing int->bigint
   # for FK column trip_requests.trip_id
   # bundle exec rake active_record_doctor

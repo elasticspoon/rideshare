@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class TripCreator
   class TripCreationFailure < StandardError; end
 
@@ -13,6 +15,7 @@ class TripCreator
       driver: best_available_driver
     )
     raise TripCreationFailure unless trip.valid?
+
     trip.save!
   end
 
