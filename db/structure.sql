@@ -10,17 +10,16 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS fk_rails_fa2679b626;
-ALTER TABLE IF EXISTS ONLY rideshare.trips DROP CONSTRAINT IF EXISTS fk_rails_e7560abc33;
-ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS fk_rails_c17a139554;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_positions DROP CONSTRAINT IF EXISTS fk_rails_9688ac8706;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXISTS fk_rails_7edc8e666a;
 ALTER TABLE IF EXISTS ONLY rideshare.trips DROP CONSTRAINT IF EXISTS fk_rails_6d92acb430;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXISTS fk_rails_59996232fc;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS fk_rails_3fdebbfaca;
+DROP INDEX IF EXISTS rideshare.users_pkey_copy;
 DROP INDEX IF EXISTS rideshare.index_vehicles_on_name;
 DROP INDEX IF EXISTS rideshare.index_vehicle_reservations_on_vehicle_id;
-DROP INDEX IF EXISTS rideshare.index_users_on_last_name;
-DROP INDEX IF EXISTS rideshare.index_users_on_email;
+DROP INDEX IF EXISTS rideshare.index_users_on_last_name_copy;
+DROP INDEX IF EXISTS rideshare.index_users_on_email_copy;
 DROP INDEX IF EXISTS rideshare.index_trips_on_trip_request_id;
 DROP INDEX IF EXISTS rideshare.index_trips_on_rating;
 DROP INDEX IF EXISTS rideshare.index_trips_on_driver_id;
@@ -28,10 +27,8 @@ DROP INDEX IF EXISTS rideshare.index_trip_requests_on_start_location_id;
 DROP INDEX IF EXISTS rideshare.index_trip_requests_on_rider_id;
 DROP INDEX IF EXISTS rideshare.index_trip_requests_on_end_location_id;
 DROP INDEX IF EXISTS rideshare.index_locations_on_address;
-DROP INDEX IF EXISTS rideshare.index_fast_search_results_on_driver_id;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicles DROP CONSTRAINT IF EXISTS vehicles_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXISTS vehicle_reservations_pkey;
-ALTER TABLE IF EXISTS ONLY rideshare.users DROP CONSTRAINT IF EXISTS users_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trips DROP CONSTRAINT IF EXISTS trips_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS trip_requests_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_positions DROP CONSTRAINT IF EXISTS trip_positions_pkey;
@@ -52,21 +49,20 @@ DROP TABLE IF EXISTS rideshare.vehicles;
 DROP SEQUENCE IF EXISTS rideshare.vehicle_reservations_id_seq;
 DROP TABLE IF EXISTS rideshare.vehicle_reservations;
 DROP SEQUENCE IF EXISTS rideshare.users_id_seq;
+DROP TABLE IF EXISTS rideshare.users;
 DROP SEQUENCE IF EXISTS rideshare.trips_id_seq;
+DROP TABLE IF EXISTS rideshare.trips;
 DROP SEQUENCE IF EXISTS rideshare.trip_requests_id_seq;
 DROP TABLE IF EXISTS rideshare.trip_requests;
 DROP SEQUENCE IF EXISTS rideshare.trip_positions_id_seq;
 DROP TABLE IF EXISTS rideshare.trip_positions;
-DROP VIEW IF EXISTS rideshare.search_results;
 DROP TABLE IF EXISTS rideshare.schema_migrations;
 DROP SEQUENCE IF EXISTS rideshare.locations_id_seq;
 DROP TABLE IF EXISTS rideshare.locations;
-DROP MATERIALIZED VIEW IF EXISTS rideshare.fast_search_results;
-DROP TABLE IF EXISTS rideshare.users;
-DROP TABLE IF EXISTS rideshare.trips;
 DROP TABLE IF EXISTS rideshare.ar_internal_metadata;
 DROP FUNCTION IF EXISTS rideshare.scrub_text(input character varying);
 DROP FUNCTION IF EXISTS rideshare.scrub_email(email_address character varying);
+DROP PROCEDURE IF EXISTS rideshare.scrub_batches();
 DROP FUNCTION IF EXISTS rideshare.fast_count(identifier text, threshold bigint);
 DROP TYPE IF EXISTS rideshare.vehicle_status;
 DROP SCHEMA IF EXISTS rideshare;
@@ -147,6 +143,36 @@ $$;
 
 
 --
+-- Name: scrub_batches(); Type: PROCEDURE; Schema: rideshare; Owner: -
+--
+
+CREATE PROCEDURE rideshare.scrub_batches()
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  current_id INT := (SELECT MIN(id) FROM users);
+  max_id INT := (SELECT MAX(id) FROM users);
+  batch_size INT := 1000;
+  rows_updated INT;
+BEGIN
+  WHILE current_id <= max_id LOOP
+    UPDATE users
+    SET email = SCRUB_EMAIL(email)
+    WHERE id >= current_id
+    AND id < current_id + batch_size;
+
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    
+    COMMIT;
+    RAISE NOTICE 'current_id: % - number of rows updated: %', current_id, rows_updated;
+    
+    current_id := current_id + batch_size + 1;
+  END LOOP;
+END;
+$$;
+
+
+--
 -- Name: scrub_email(character varying); Type: FUNCTION; Schema: rideshare; Owner: -
 --
 
@@ -200,63 +226,6 @@ CREATE TABLE rideshare.ar_internal_metadata (
 
 
 --
--- Name: trips; Type: TABLE; Schema: rideshare; Owner: -
---
-
-CREATE TABLE rideshare.trips (
-    id bigint NOT NULL,
-    trip_request_id bigint NOT NULL,
-    driver_id integer NOT NULL,
-    completed_at timestamp without time zone,
-    rating integer,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT rating_check CHECK (((rating >= 1) AND (rating <= 5)))
-);
-
-
---
--- Name: users; Type: TABLE; Schema: rideshare; Owner: -
---
-
-CREATE TABLE rideshare.users (
-    id bigint NOT NULL,
-    first_name character varying NOT NULL,
-    last_name character varying NOT NULL,
-    email character varying NOT NULL,
-    type character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    password_digest character varying,
-    trips_count integer,
-    drivers_license_number character varying(100)
-);
-
-
---
--- Name: TABLE users; Type: COMMENT; Schema: rideshare; Owner: -
---
-
-COMMENT ON TABLE rideshare.users IS 'sensitive_fields|first_name:scrub_text,last_name:scrub_text,email:scrub_email';
-
-
---
--- Name: fast_search_results; Type: MATERIALIZED VIEW; Schema: rideshare; Owner: -
---
-
-CREATE MATERIALIZED VIEW rideshare.fast_search_results AS
- SELECT t.driver_id,
-    concat(d.first_name, ' ', d.last_name) AS driver_name,
-    avg(t.rating) AS avg_rating,
-    count(t.rating) AS trip_count
-   FROM (rideshare.trips t
-     JOIN rideshare.users d ON ((t.driver_id = d.id)))
-  GROUP BY t.driver_id, d.first_name, d.last_name
-  ORDER BY (count(t.rating)) DESC
-  WITH NO DATA;
-
-
---
 -- Name: locations; Type: TABLE; Schema: rideshare; Owner: -
 --
 
@@ -298,20 +267,6 @@ ALTER SEQUENCE rideshare.locations_id_seq OWNED BY rideshare.locations.id;
 CREATE TABLE rideshare.schema_migrations (
     version character varying NOT NULL
 );
-
-
---
--- Name: search_results; Type: VIEW; Schema: rideshare; Owner: -
---
-
-CREATE VIEW rideshare.search_results AS
- SELECT concat(d.first_name, ' ', d.last_name) AS driver_name,
-    avg(t.rating) AS avg_rating,
-    count(t.rating) AS trip_count
-   FROM (rideshare.trips t
-     JOIN rideshare.users d ON ((t.driver_id = d.id)))
-  GROUP BY t.driver_id, d.first_name, d.last_name
-  ORDER BY (count(t.rating)) DESC;
 
 
 --
@@ -380,6 +335,22 @@ ALTER SEQUENCE rideshare.trip_requests_id_seq OWNED BY rideshare.trip_requests.i
 
 
 --
+-- Name: trips; Type: TABLE; Schema: rideshare; Owner: -
+--
+
+CREATE TABLE rideshare.trips (
+    id bigint NOT NULL,
+    trip_request_id bigint NOT NULL,
+    driver_id integer NOT NULL,
+    completed_at timestamp without time zone,
+    rating integer,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT rating_check CHECK (((rating >= 1) AND (rating <= 5)))
+);
+
+
+--
 -- Name: trips_id_seq; Type: SEQUENCE; Schema: rideshare; Owner: -
 --
 
@@ -396,6 +367,52 @@ CREATE SEQUENCE rideshare.trips_id_seq
 --
 
 ALTER SEQUENCE rideshare.trips_id_seq OWNED BY rideshare.trips.id;
+
+
+--
+-- Name: users; Type: TABLE; Schema: rideshare; Owner: -
+--
+
+CREATE TABLE rideshare.users (
+    id bigint NOT NULL,
+    first_name character varying NOT NULL,
+    last_name character varying NOT NULL,
+    email character varying NOT NULL,
+    type character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    password_digest character varying,
+    trips_count integer,
+    drivers_license_number character varying(100)
+);
+
+
+--
+-- Name: COLUMN users.first_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.first_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.last_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.last_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.email; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.email IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.drivers_license_number; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.drivers_license_number IS 'sensitive_data=true';
 
 
 --
@@ -598,14 +615,6 @@ ALTER TABLE ONLY rideshare.trips
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: rideshare; Owner: -
---
-
-ALTER TABLE ONLY rideshare.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-
-
---
 -- Name: vehicle_reservations vehicle_reservations_pkey; Type: CONSTRAINT; Schema: rideshare; Owner: -
 --
 
@@ -619,13 +628,6 @@ ALTER TABLE ONLY rideshare.vehicle_reservations
 
 ALTER TABLE ONLY rideshare.vehicles
     ADD CONSTRAINT vehicles_pkey PRIMARY KEY (id);
-
-
---
--- Name: index_fast_search_results_on_driver_id; Type: INDEX; Schema: rideshare; Owner: -
---
-
-CREATE UNIQUE INDEX index_fast_search_results_on_driver_id ON rideshare.fast_search_results USING btree (driver_id);
 
 
 --
@@ -678,17 +680,17 @@ CREATE INDEX index_trips_on_trip_request_id ON rideshare.trips USING btree (trip
 
 
 --
--- Name: index_users_on_email; Type: INDEX; Schema: rideshare; Owner: -
+-- Name: index_users_on_email_copy; Type: INDEX; Schema: rideshare; Owner: -
 --
 
-CREATE UNIQUE INDEX index_users_on_email ON rideshare.users USING btree (email);
+CREATE UNIQUE INDEX index_users_on_email_copy ON rideshare.users USING btree (email);
 
 
 --
--- Name: index_users_on_last_name; Type: INDEX; Schema: rideshare; Owner: -
+-- Name: index_users_on_last_name_copy; Type: INDEX; Schema: rideshare; Owner: -
 --
 
-CREATE INDEX index_users_on_last_name ON rideshare.users USING btree (last_name);
+CREATE INDEX index_users_on_last_name_copy ON rideshare.users USING btree (last_name);
 
 
 --
@@ -703,6 +705,13 @@ CREATE INDEX index_vehicle_reservations_on_vehicle_id ON rideshare.vehicle_reser
 --
 
 CREATE UNIQUE INDEX index_vehicles_on_name ON rideshare.vehicles USING btree (name);
+
+
+--
+-- Name: users_pkey_copy; Type: INDEX; Schema: rideshare; Owner: -
+--
+
+CREATE UNIQUE INDEX users_pkey_copy ON rideshare.users USING btree (id);
 
 
 --
@@ -743,22 +752,6 @@ ALTER TABLE ONLY rideshare.vehicle_reservations
 
 ALTER TABLE ONLY rideshare.trip_positions
     ADD CONSTRAINT fk_rails_9688ac8706 FOREIGN KEY (trip_id) REFERENCES rideshare.trips(id);
-
-
---
--- Name: trip_requests fk_rails_c17a139554; Type: FK CONSTRAINT; Schema: rideshare; Owner: -
---
-
-ALTER TABLE ONLY rideshare.trip_requests
-    ADD CONSTRAINT fk_rails_c17a139554 FOREIGN KEY (rider_id) REFERENCES rideshare.users(id);
-
-
---
--- Name: trips fk_rails_e7560abc33; Type: FK CONSTRAINT; Schema: rideshare; Owner: -
---
-
-ALTER TABLE ONLY rideshare.trips
-    ADD CONSTRAINT fk_rails_e7560abc33 FOREIGN KEY (driver_id) REFERENCES rideshare.users(id);
 
 
 --
