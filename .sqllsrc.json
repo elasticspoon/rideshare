@@ -1,0 +1,9 @@
+{
+  "name": "rideshare",
+  "adapter": "postgres",
+  "host": "localhost",
+  "port": 5432,
+  "user": "owner",
+  "password": "postgres",
+  "database": "rideshare_development"
+}

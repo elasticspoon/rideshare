@@ -15,11 +15,11 @@
     }
   },
   "db": {
-    "host": "127.0.0.1",
+    "host": "localhost",
     "port": 5432,
-    "username": "postgres",
+    "username": "owner",
     "password": "postgres",
-    "database": "postgres",
+    "database": "rideshare_development",
     "connTimeoutSecs": 10
   }
 }
